@@ -1,4 +1,3 @@
-````markdown
 # Bootstrap de Ambiente Dev em Ubuntu Live Persistence
 
 Documentação para configurar um Ubuntu em modo **Live Persistence** como ambiente portátil de desenvolvimento, instalando as ferramentas principais usadas no dia a dia:
@@ -582,5 +581,3 @@ openssh-client
 ```
 
 Esse setup permite usar o pendrive persistente como ambiente portátil de desenvolvimento em qualquer computador compatível.
-````
-
