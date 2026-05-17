@@ -170,7 +170,10 @@ apply_performance_tweaks() {
   if file_contains "$ZRAM_CONF" "ALGO=zstd"; then
     skip "configuração do zRAM"
   else
-    echo -e "ALGO=zstd\nPERCENT=50" | sudo tee -a "$ZRAM_CONF" >/dev/null
+    sudo sed -i 's/^#*\s*ALGO=.*/ALGO=zstd/' "$ZRAM_CONF"
+    sudo sed -i 's/^#*\s*PERCENT=.*/PERCENT=50/' "$ZRAM_CONF"
+    grep -q '^ALGO=' "$ZRAM_CONF" || echo 'ALGO=zstd' | sudo tee -a "$ZRAM_CONF" >/dev/null
+    grep -q '^PERCENT=' "$ZRAM_CONF" || echo 'PERCENT=50' | sudo tee -a "$ZRAM_CONF" >/dev/null
     sudo systemctl restart zramswap 2>/dev/null || true
     ok "zRAM configurado (50% da RAM, compressor zstd)"
   fi
@@ -359,9 +362,9 @@ install_aws_cli() {
     x86_64)       AWS_CLI_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" ;;
     aarch64|arm64) AWS_CLI_URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" ;;
     *)
-      echo "ERRO: arquitetura não suportada: $(uname -m)"
+      echo "AVISO: AWS CLI ignorado — arquitetura '$(uname -m)' não suportada."
       cd ~; rm -rf "$TMP_DIR"
-      return 1
+      return 0
       ;;
   esac
 
@@ -389,6 +392,14 @@ install_node() {
 
   NVM_DIR="${HOME}/.nvm"
 
+  # Carregar nvm se já instalado (necessário em shell novo onde nvm não foi sourced)
+  if [ -d "$NVM_DIR" ]; then
+    set +u
+    # shellcheck source=/dev/null
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    set -u
+  fi
+
   if [ -d "$NVM_DIR" ] && command_exists node; then
     skip "nvm e Node.js ($(node --version))"
     return 0
@@ -396,13 +407,13 @@ install_node() {
 
   curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
-  # Carregar nvm na sessão atual
   export NVM_DIR="$NVM_DIR"
+  set +u
   # shellcheck source=/dev/null
   [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-
   nvm install --lts
   nvm use --lts
+  set -u
   ok "Node.js $(node --version) instalado via nvm"
 }
 
@@ -415,8 +426,10 @@ install_claude_code() {
 
   # Garantir que npm está disponível
   export NVM_DIR="${HOME}/.nvm"
+  set +u
   # shellcheck source=/dev/null
   [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" || true
+  set -u
 
   if ! command_exists npm; then
     echo "AVISO: npm não encontrado. Instale Node.js primeiro."
@@ -456,8 +469,10 @@ validate_installation() {
 
   # Carregar nvm para validar node/claude
   export NVM_DIR="${HOME}/.nvm"
+  set +u
   # shellcheck source=/dev/null
   [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" || true
+  set -u
 
   for tool in git "git lfs" gh aws code "google-chrome" node npm claude; do
     VERSION=$(eval "$tool --version" 2>/dev/null | head -1 || true)
@@ -474,7 +489,8 @@ validate_installation() {
 
   echo
   echo "dpkg audit:"
-  sudo dpkg --audit && echo "  (limpo)" || true
+  AUDIT_OUT="$(sudo dpkg --audit 2>&1)"
+  [ -z "$AUDIT_OUT" ] && echo "  (limpo)" || echo "$AUDIT_OUT"
 
   echo
   echo "Memória e swap:"
